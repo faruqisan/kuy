@@ -64,7 +64,7 @@ func main() {
 
 ```
 
-test the API using [hey](https://github.com/rakyll/hey)
+test the API using [hey](https://github.com/rakyll/hey) to simulate 100 user do the join request simultaneously
 
 ```bash 
  hey -n=100 -c=100 -m=GET http://localhost:3000/join 
