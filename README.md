@@ -1,4 +1,6 @@
 # kuy
+[![Documentation](https://godoc.org/github.com/faruqisan/kuy?status.svg)](https://godoc.org/github.com/faruqisan/kuy)
+[![Go Report Card](https://goreportcard.com/badge/github.com/faruqisan/kuy)](https://goreportcard.com/report/github.com/faruqisan/kuy)
 
 match maker queueing system using golang
 
