@@ -8,16 +8,19 @@ type (
 	pool struct {
 		id      string
 		maxItem int
-		m       sync.Mutex
-		items   []interface{}
 
-		fullChan chan PoolResp
+		m     sync.Mutex
+		items []interface{}
+
+		respChan chan PoolResp
 	}
 
 	// PoolResp function define response when item joining the pool
 	PoolResp struct {
-		IsFull bool
-		Items  []interface{}
+		PoolID   string
+		IsFull   bool
+		TimeIsUp bool
+		Items    []interface{}
 	}
 )
 
@@ -26,7 +29,7 @@ func newPool(id string, maxItem int) *pool {
 	return &pool{
 		id:       id,
 		maxItem:  maxItem,
-		fullChan: make(chan PoolResp, maxItem),
+		respChan: make(chan PoolResp, maxItem),
 	}
 }
 
@@ -34,17 +37,17 @@ func (p *pool) add(item interface{}) chan PoolResp {
 	p.m.Lock()
 	defer func() {
 		if len(p.items) == p.maxItem {
-			p.fullChan <- PoolResp{
+			p.respChan <- PoolResp{
+				PoolID: p.id,
 				IsFull: true,
 				Items:  p.items,
 			}
 		}
 		p.m.Unlock()
 	}()
-
 	p.items = append(p.items, item)
 
-	return p.fullChan
+	return p.respChan
 
 }
 

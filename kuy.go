@@ -1,40 +1,44 @@
 package kuy
 
 import (
-	"log"
+	"fmt"
 	"sync"
+	"time"
 
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 )
 
 // Engine struct hold required data, and act as function receiver
 type Engine struct {
-	maxItem int
-	mutex   sync.Mutex
-	pools   []*pool
+	maxItem    int
+	waitPeriod time.Duration
+	mutex      sync.Mutex
+	pools      []*pool
+}
+
+// Option struct define engine option configuration
+type Option struct {
+	MaxItem    int
+	WaitPeriod time.Duration
 }
 
 // New function return engine struct
-func New(maxItem int) *Engine {
+func New(opt Option) *Engine {
 	return &Engine{
-		maxItem: maxItem,
+		maxItem:    opt.MaxItem,
+		waitPeriod: opt.WaitPeriod,
 	}
 }
 
 func (e *Engine) getAvailablePool() *pool {
 	var (
-		p      *pool
-		joined bool
-		nop    = e.GetNumberOfPools()
+		nop = e.GetNumberOfPools()
+		id  = uuid.New().ID()
+		sID = fmt.Sprintf("%d", id)
 	)
 
-	id, err := uuid.NewV4()
-	if err != nil {
-		log.Println(err)
-	}
-
 	if nop == 0 {
-		return e.createPool(id.String())
+		return e.createPool(sID)
 	}
 
 	for _, v := range e.pools {
@@ -43,11 +47,7 @@ func (e *Engine) getAvailablePool() *pool {
 		}
 	}
 
-	if !joined {
-		return e.createPool(id.String())
-	}
-
-	return p
+	return e.createPool(sID)
 }
 
 func (e *Engine) createPool(id string) *pool {
@@ -63,7 +63,25 @@ func (e *Engine) createPool(id string) *pool {
 // Join function add given item into available pool, returning chanel of PoolResp
 // that will notify when pool is full and ready.
 func (e *Engine) Join(item interface{}) chan PoolResp {
-	p := e.getAvailablePool()
+	var (
+		p     = e.getAvailablePool()
+		timer = time.NewTimer(e.waitPeriod)
+	)
+
+	go func() {
+		select {
+		case <-timer.C:
+			if p.ableToJoin() {
+				p.respChan <- PoolResp{
+					PoolID:   p.id,
+					TimeIsUp: true,
+					Items:    p.items,
+				}
+			}
+			break
+		}
+	}()
+
 	return p.add(item)
 }
 
