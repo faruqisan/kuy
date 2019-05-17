@@ -2,6 +2,7 @@ package kuy
 
 import (
 	"log"
+	"sync"
 
 	"github.com/gofrs/uuid"
 )
@@ -9,6 +10,7 @@ import (
 // Engine struct hold required data, and act as function receiver
 type Engine struct {
 	maxItem int
+	mutex   sync.Mutex
 	pools   []*pool
 }
 
@@ -23,6 +25,7 @@ func (e *Engine) getAvailablePool() *pool {
 	var (
 		p      *pool
 		joined bool
+		nop    = e.GetNumberOfPools()
 	)
 
 	id, err := uuid.NewV4()
@@ -30,10 +33,8 @@ func (e *Engine) getAvailablePool() *pool {
 		log.Println(err)
 	}
 
-	if len(e.pools) == 0 {
-		p = newPool(id.String(), e.maxItem)
-		e.pools = append(e.pools, p)
-		return p
+	if nop == 0 {
+		return e.createPool(id.String())
 	}
 
 	for _, v := range e.pools {
@@ -43,10 +44,18 @@ func (e *Engine) getAvailablePool() *pool {
 	}
 
 	if !joined {
-		p = newPool(id.String(), e.maxItem)
-		e.pools = append(e.pools, p)
-		return p
+		return e.createPool(id.String())
 	}
+
+	return p
+}
+
+func (e *Engine) createPool(id string) *pool {
+	p := newPool(id, e.maxItem)
+
+	e.mutex.Lock()
+	e.pools = append(e.pools, p)
+	e.mutex.Unlock()
 
 	return p
 }
@@ -60,5 +69,7 @@ func (e *Engine) Join(item interface{}) chan PoolResp {
 
 // GetNumberOfPools return number of pools
 func (e *Engine) GetNumberOfPools() int {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
 	return len(e.pools)
 }

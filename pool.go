@@ -1,6 +1,8 @@
 package kuy
 
-import "sync"
+import (
+	"sync"
+)
 
 type (
 	pool struct {
@@ -22,8 +24,9 @@ type (
 // NewPool func create new pool
 func newPool(id string, maxItem int) *pool {
 	return &pool{
+		id:       id,
 		maxItem:  maxItem,
-		fullChan: make(chan PoolResp, 1),
+		fullChan: make(chan PoolResp, maxItem),
 	}
 }
 
