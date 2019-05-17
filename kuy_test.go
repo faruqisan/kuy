@@ -9,8 +9,8 @@ import (
 func Test_kuy(t *testing.T) {
 
 	var (
-		numOfUser         = 500
-		maxItem           = 5
+		numOfUser         = 20
+		maxItem           = 10
 		expectedNumOfPool = numOfUser / maxItem
 	)
 
