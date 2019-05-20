@@ -8,6 +8,14 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	emptyTime = "0001-01-01 00:00:00 +0000 UTC"
+)
+
+var (
+	defaultWaitPeriod = time.Second * 2
+)
+
 // Engine struct hold required data, and act as function receiver
 type Engine struct {
 	maxItem     int
@@ -25,9 +33,18 @@ type Option struct {
 
 // New function return engine struct
 func New(opt Option) *Engine {
+
+	var (
+		wp = defaultWaitPeriod
+	)
+
+	if opt.WaitPeriod.String() == emptyTime {
+		wp = opt.WaitPeriod
+	}
+
 	return &Engine{
 		maxItem:     opt.MaxItem,
-		waitPeriod:  opt.WaitPeriod,
+		waitPeriod:  wp,
 		expiredPool: make(map[string]struct{}),
 	}
 }
