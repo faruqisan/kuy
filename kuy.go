@@ -10,10 +10,11 @@ import (
 
 // Engine struct hold required data, and act as function receiver
 type Engine struct {
-	maxItem    int
-	waitPeriod time.Duration
-	mutex      sync.Mutex
-	pools      []*pool
+	maxItem     int
+	waitPeriod  time.Duration
+	mutex       sync.Mutex
+	pools       []*pool
+	expiredPool map[string]struct{}
 }
 
 // Option struct define engine option configuration
@@ -25,8 +26,9 @@ type Option struct {
 // New function return engine struct
 func New(opt Option) *Engine {
 	return &Engine{
-		maxItem:    opt.MaxItem,
-		waitPeriod: opt.WaitPeriod,
+		maxItem:     opt.MaxItem,
+		waitPeriod:  opt.WaitPeriod,
+		expiredPool: make(map[string]struct{}),
 	}
 }
 
@@ -41,6 +43,8 @@ func (e *Engine) getAvailablePool() *pool {
 		return e.createPool(sID)
 	}
 
+	// TODO: improve find pools
+	// currently we just loop through pools on engine
 	for _, v := range e.pools {
 		if v.ableToJoin() {
 			return v
@@ -71,13 +75,32 @@ func (e *Engine) Join(item interface{}) chan PoolResp {
 	go func() {
 		select {
 		case <-timer.C:
+
+			e.mutex.Lock()
+
 			if p.ableToJoin() {
-				p.respChan <- PoolResp{
-					PoolID:   p.id,
-					TimeIsUp: true,
-					Items:    p.items,
+
+				p.expireWaitCount++
+
+				if _, ok := e.expiredPool[p.id]; !ok {
+
+					p.respChan <- PoolResp{
+						PoolID:   p.id,
+						TimeIsUp: true,
+						Items:    p.items,
+					}
+					e.expiredPool[p.id] = struct{}{}
+				}
+
+				if p.expireWaitCount == len(p.items) {
+					// remove items on pool
+					p.items = nil
+					// remove pool from expired map
+					delete(e.expiredPool, p.id)
 				}
 			}
+
+			e.mutex.Unlock()
 			break
 		}
 	}()

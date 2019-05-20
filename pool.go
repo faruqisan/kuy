@@ -12,6 +12,8 @@ type (
 		m     sync.Mutex
 		items []interface{}
 
+		expireWaitCount int
+
 		respChan chan PoolResp
 	}
 
