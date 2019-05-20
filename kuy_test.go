@@ -14,7 +14,9 @@ func Test_kuy(t *testing.T) {
 		expectedNumOfPool = numOfUser / maxItem
 	)
 
-	e := New(maxItem)
+	e := New(Option{
+		MaxItem: maxItem,
+	})
 
 	for i := 0; i < numOfUser; i++ {
 		e.Join(i)

@@ -1,53 +1,74 @@
 package kuy
 
 import (
-	"log"
+	"fmt"
 	"sync"
+	"time"
 
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
+)
+
+const (
+	emptyTime = "0001-01-01 00:00:00 +0000 UTC"
+)
+
+var (
+	defaultWaitPeriod = time.Second * 2
 )
 
 // Engine struct hold required data, and act as function receiver
 type Engine struct {
-	maxItem int
-	mutex   sync.Mutex
-	pools   []*pool
+	maxItem     int
+	waitPeriod  time.Duration
+	mutex       sync.Mutex
+	pools       []*pool
+	expiredPool map[string]struct{}
+}
+
+// Option struct define engine option configuration
+type Option struct {
+	MaxItem    int
+	WaitPeriod time.Duration
 }
 
 // New function return engine struct
-func New(maxItem int) *Engine {
+func New(opt Option) *Engine {
+
+	var (
+		wp = defaultWaitPeriod
+	)
+
+	if opt.WaitPeriod.String() == emptyTime {
+		wp = opt.WaitPeriod
+	}
+
 	return &Engine{
-		maxItem: maxItem,
+		maxItem:     opt.MaxItem,
+		waitPeriod:  wp,
+		expiredPool: make(map[string]struct{}),
 	}
 }
 
 func (e *Engine) getAvailablePool() *pool {
 	var (
-		p      *pool
-		joined bool
-		nop    = e.GetNumberOfPools()
+		nop = e.GetNumberOfPools()
+		id  = uuid.New().ID()
+		sID = fmt.Sprintf("%d", id)
 	)
 
-	id, err := uuid.NewV4()
-	if err != nil {
-		log.Println(err)
-	}
-
 	if nop == 0 {
-		return e.createPool(id.String())
+		return e.createPool(sID)
 	}
 
+	// TODO: improve find pools
+	// currently we just loop through pools on engine
 	for _, v := range e.pools {
 		if v.ableToJoin() {
 			return v
 		}
 	}
 
-	if !joined {
-		return e.createPool(id.String())
-	}
-
-	return p
+	return e.createPool(sID)
 }
 
 func (e *Engine) createPool(id string) *pool {
@@ -63,7 +84,44 @@ func (e *Engine) createPool(id string) *pool {
 // Join function add given item into available pool, returning chanel of PoolResp
 // that will notify when pool is full and ready.
 func (e *Engine) Join(item interface{}) chan PoolResp {
-	p := e.getAvailablePool()
+	var (
+		p     = e.getAvailablePool()
+		timer = time.NewTimer(e.waitPeriod)
+	)
+
+	go func() {
+		select {
+		case <-timer.C:
+
+			e.mutex.Lock()
+
+			if p.ableToJoin() {
+
+				p.expireWaitCount++
+
+				if _, ok := e.expiredPool[p.id]; !ok {
+
+					p.respChan <- PoolResp{
+						PoolID:   p.id,
+						TimeIsUp: true,
+						Items:    p.items,
+					}
+					e.expiredPool[p.id] = struct{}{}
+				}
+
+				if p.expireWaitCount == len(p.items) {
+					// remove items on pool
+					p.items = nil
+					// remove pool from expired map
+					delete(e.expiredPool, p.id)
+				}
+			}
+
+			e.mutex.Unlock()
+			break
+		}
+	}()
+
 	return p.add(item)
 }
 

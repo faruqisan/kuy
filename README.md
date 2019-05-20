@@ -15,6 +15,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/faruqisan/kuy"
 	"github.com/go-chi/chi"
@@ -27,7 +28,10 @@ const (
 
 func main() {
 
-	k := kuy.New(numberOfPlayerInRoom)
+	k := kuy.New(kuy.Option{
+		MaxItem:    numberOfPlayerInRoom,
+		WaitPeriod: time.Second * 4, // wait for 1 sec
+	})
 
 	r := chi.NewRouter()
 	// endpoint for find and join pool
@@ -41,10 +45,15 @@ func main() {
 
 		// spawn go routine for listen the pool full channel
 		go func() {
-			for res := range c {
+			select {
+			case res := <-c:
 				if res.IsFull {
 					// when pool is full, do something .. in our case we just print it
-					fmt.Println("pool is ready with players : ", res.Items)
+					fmt.Println("pool", res.PoolID, " is ready with players : ", res.Items)
+				}
+				// listen for expired waiting time
+				if res.TimeIsUp {
+					fmt.Println("pool : ", res.PoolID, " can't find full member, and waiting time is over, members : ", res.Items)
 				}
 			}
 		}()
@@ -86,6 +95,7 @@ pool is ready with players :  [782453394 2171594867 1557878423 98355756 39460097
 pool is ready with players :  [815681643 725905823 2790529077 3239416422 3381845128 3290407237 895526513 3516610004 1159466696 3258242278]
 pool is ready with players :  [1091183992 1644771226 3923443848 3297405419 752093695 1302577618 4139572002 2691586518 2716704208 2737147699]
 pool is ready with players :  [429182431 30544284 2964614348 583734382 3981060614 998643018 3453168831 625346978 1325249995 388061744]
+pool :  900356084  can't find full member, and waiting time is over, members :  [4036636872]
 
 ```
 
